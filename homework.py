@@ -5,6 +5,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import telegram
+from http import HTTPStatus
 
 load_dotenv()
 
@@ -64,6 +65,10 @@ def get_api_answer(current_timestamp):
     except Exception as error:
         logging.error(f'Ошибка при запросе к эндпоинту API-сервиса: {error}')
         raise Exception(f'Ошибка при запросе к эндпоинту API-сервиса: {error}')
+    if homework_statuses.status_code != HTTPStatus.OK:
+        status_code = homework_statuses.status_code
+        logging.error(f'Ошибка {status_code}')
+        raise Exception(f'Ошибка {status_code}')
     try:
         return homework_statuses.json()
     except ValueError:
