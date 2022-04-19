@@ -22,8 +22,6 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-TOKEN_LST = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-
 logging.basicConfig(
     level=logging.DEBUG,
     filename='main.log',
@@ -110,9 +108,9 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения"""
-    if None in TOKEN_LST:
-        return False
-    return True
+    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
+        return True
+    return False
 
 
 def main():
