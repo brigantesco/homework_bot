@@ -1,10 +1,12 @@
-import requests
+import json
+import logging
 import os
 import time
-import logging
 from logging.handlers import RotatingFileHandler
-from dotenv import load_dotenv
+
+import requests
 import telegram
+from dotenv import load_dotenv
 from http import HTTPStatus
 
 load_dotenv()
@@ -33,7 +35,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 handler = RotatingFileHandler('my_logger.log',
                               encoding='UTF-8',
-                              maxBytes=50000000,
+                              maxBytes=50_000_000,
                               backupCount=5
                               )
 logger.addHandler(handler)
@@ -43,13 +45,23 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 
 
+def send_error(exception, err_description):
+    """Отправка сообщения об ошибке в лог и телеграм."""
+    msg = ('В работе бота произошла ошибка: '
+           f'{exception} {err_description}')
+    logger.error(msg)
+    logger.info('Бот отправляет в Телеграм сообщение '
+                'об ошибке в своей работе.')
+    send_message(msg)
+
+
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Сообщение: {TELEGRAM_CHAT_ID}: {message}')
-    except Exception:
-        logger.error('Cообщение не отправилось')
+    except telegram.TelegramError as telegram_error:
+        logger.error(f'Cообщение в телеграмм не отправилось: {telegram_error}')
 
 
 def get_api_answer(current_timestamp):
@@ -62,23 +74,23 @@ def get_api_answer(current_timestamp):
             headers=HEADERS,
             params=params
         )
-    except Exception as error:
-        logging.error(f'Ошибка при запросе к эндпоинту API-сервиса: {error}')
-        raise Exception(f'Ошибка при запросе к эндпоинту API-сервиса: {error}')
-    if homework_statuses.status_code != HTTPStatus.OK:
-        status_code = homework_statuses.status_code
-        logging.error(f'Ошибка {status_code}')
-        raise Exception(f'Ошибка {status_code}')
+        if homework_statuses.status_code != HTTPStatus.OK:
+            msg = f'Ошибка: Статус код {homework_statuses.status_code}'
+            send_error('Not HTTPStatus.OK', msg)
+    except requests.exceptions.RequestException as request_error:
+        msg = f'Код ответа API (RequestException): {request_error}'
+        logging.error(msg)
+        raise requests.exceptions.RequestException(msg)
     try:
         return homework_statuses.json()
-    except ValueError:
+    except json.JSONDecodeError:
         logger.error('Ошибка json')
-        raise ValueError('Ошибка json')
+        raise json.JSONDecodeError('Ошибка json')
 
 
 def check_response(response):
     """Проверяет ответ API на корректность."""
-    if type(response) is not dict:
+    if not isinstance(response, dict):
         logger.error('Response не словарь')
         raise TypeError('Response не словарь')
     try:
@@ -113,38 +125,45 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
-    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        return True
-    return False
+    msg = ('Отсутствует переменная окружения:')
+    tokens_bool = True
+    if PRACTICUM_TOKEN is None:
+        tokens_bool = False
+        logger.critical(f'{msg} PRACTICUM_TOKEN')
+    elif TELEGRAM_TOKEN is None:
+        tokens_bool = False
+        logger.critical(f'{msg} TELEGRAM_TOKEN')
+    elif TELEGRAM_CHAT_ID is None:
+        tokens_bool = False
+        logger.critical(f'{msg} CHAT_ID')
+    return tokens_bool
 
 
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        logger.critical('Отсутствует переменные среды')
-        raise Exception('Отсутствует переменные среды')
-    status = ''
-    msg_err = ''
+        exit()
+    status = None
+    msg_err = None
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
 
     while True:
         try:
             response = get_api_answer(current_timestamp)
-            current_timestamp = response.get('current_date')
+            current_timestamp = response.get('current_date', current_timestamp)
             msg = parse_status(check_response(response))
             if msg != status:
                 send_message(bot, msg)
                 status = msg
-            time.sleep(RETRY_TIME)
-
         except Exception as error:
             logger.error(error)
             message = f'Сбой в работе программы: {error}'
             if message != msg_err:
                 send_message(bot, message)
                 msg_err = message
-            time.sleep(RETRY_TIME)
+
+        time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
