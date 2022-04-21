@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 import time
 from logging.handlers import RotatingFileHandler
 
@@ -45,16 +46,6 @@ formatter = logging.Formatter(
 handler.setFormatter(formatter)
 
 
-def send_error(exception, err_description):
-    """Отправка сообщения об ошибке в лог и телеграм."""
-    msg = ('В работе бота произошла ошибка: '
-           f'{exception} {err_description}')
-    logger.error(msg)
-    logger.info('Бот отправляет в Телеграм сообщение '
-                'об ошибке в своей работе.')
-    send_message(msg)
-
-
 def send_message(bot, message):
     """Отправляет сообщение в Telegram чат."""
     try:
@@ -74,13 +65,14 @@ def get_api_answer(current_timestamp):
             headers=HEADERS,
             params=params
         )
-        if homework_statuses.status_code != HTTPStatus.OK:
-            msg = f'Ошибка: Статус код {homework_statuses.status_code}'
-            send_error('Not HTTPStatus.OK', msg)
     except requests.exceptions.RequestException as request_error:
         msg = f'Код ответа API (RequestException): {request_error}'
         logging.error(msg)
         raise requests.exceptions.RequestException(msg)
+    if homework_statuses.status_code != HTTPStatus.OK:
+        msg = f'Ошибка: Статус код {homework_statuses.status_code}'
+        logger.error(msg)
+        raise requests.exceptions.APIResponseStatusCodeException(msg)
     try:
         return homework_statuses.json()
     except json.JSONDecodeError:
@@ -99,11 +91,10 @@ def check_response(response):
         logger.error('Нет ключа homeworks')
         raise KeyError('Ошибка: нет ключа homeworks')
     try:
-        lst[0]
+        return lst[0]
     except IndexError:
         logger.error('Список домашних работ пуст')
         raise IndexError('Список домашних работ пуст')
-    return lst[0]
 
 
 def parse_status(homework):
@@ -125,24 +116,23 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет доступность переменных окружения."""
+    dict_token = {
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID}
     msg = ('Отсутствует переменная окружения:')
     tokens_bool = True
-    if PRACTICUM_TOKEN is None:
-        tokens_bool = False
-        logger.critical(f'{msg} PRACTICUM_TOKEN')
-    elif TELEGRAM_TOKEN is None:
-        tokens_bool = False
-        logger.critical(f'{msg} TELEGRAM_TOKEN')
-    elif TELEGRAM_CHAT_ID is None:
-        tokens_bool = False
-        logger.critical(f'{msg} CHAT_ID')
+    for token, value in dict_token.items():
+        if value is None:
+            tokens_bool = False
+            logger.critical(f'{msg} {token}')
     return tokens_bool
 
 
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        exit()
+        sys.exit(1)
     status = None
     msg_err = None
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
@@ -162,7 +152,6 @@ def main():
             if message != msg_err:
                 send_message(bot, message)
                 msg_err = message
-
         time.sleep(RETRY_TIME)
 
 
