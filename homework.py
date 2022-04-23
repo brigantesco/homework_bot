@@ -55,6 +55,22 @@ def send_message(bot, message):
         logger.error(f'Cообщение в телеграмм не отправилось: {telegram_error}')
 
 
+class SatatusCodeNot200(Exception):
+    """Ошибка при статусе запроса отлиичном от 200."""
+
+    def __init__(self, msg):
+        """Конструктор."""
+        super().__init__(msg)
+
+
+class RequestsErrSend(Exception):
+    """Ошибка отправки запроса."""
+
+    def __init__(self, msg):
+        """Конструктор."""
+        super().__init__(msg)
+
+
 def get_api_answer(current_timestamp):
     """Делает запрос к единственному эндпоинту API-сервиса."""
     timestamp = current_timestamp or int(time.time())
@@ -68,11 +84,11 @@ def get_api_answer(current_timestamp):
     except requests.exceptions.RequestException as request_error:
         msg = f'Код ответа API (RequestException): {request_error}'
         logging.error(msg)
-        raise requests.exceptions.RequestException(msg)
+        raise RequestsErrSend(msg)
     if homework_statuses.status_code != HTTPStatus.OK:
         msg = f'Ошибка: Статус код {homework_statuses.status_code}'
         logger.error(msg)
-        raise requests.exceptions.APIResponseStatusCodeException(msg)
+        raise SatatusCodeNot200(msg)
     try:
         return homework_statuses.json()
     except json.JSONDecodeError:
@@ -104,12 +120,12 @@ def parse_status(homework):
         raise KeyError('Нет ключа "homework_name"')
     if 'status' not in homework:
         logger.error('Нет ключа "status"')
-        raise Exception('Нет ключа "status"')
+        raise KeyError('Нет ключа "status"')
     homework_name = homework['homework_name']
     homework_status = homework['status']
     if homework_status not in HOMEWORK_STATUSES:
         logger.error(f'Неизвестный статус: {homework_status}')
-        raise Exception(f'Неизвестный статус: {homework_status}')
+        raise KeyError(f'Неизвестный статус: {homework_status}')
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
