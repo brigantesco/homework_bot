@@ -55,21 +55,13 @@ def send_message(bot, message):
         logger.error(f'Cообщение в телеграмм не отправилось: {telegram_error}')
 
 
-class SatatusCodeNot200(Exception):
+class StatusCodeNot200(Exception):
     """Ошибка при статусе запроса отлиичном от 200."""
+    pass
 
-    def __init__(self, msg):
-        """Конструктор."""
-        super().__init__(msg)
-
-
-class RequestsErrSend(Exception):
+class RequestsErrorGetApiAnswer(Exception):
     """Ошибка отправки запроса."""
-
-    def __init__(self, msg):
-        """Конструктор."""
-        super().__init__(msg)
-
+    pass
 
 def get_api_answer(current_timestamp):
     """Делает запрос к единственному эндпоинту API-сервиса."""
@@ -82,13 +74,13 @@ def get_api_answer(current_timestamp):
             params=params
         )
     except requests.exceptions.RequestException as request_error:
-        msg = f'Код ответа API (RequestException): {request_error}'
+        msg = f'Исключение (RequestException): {request_error}'
         logging.error(msg)
-        raise RequestsErrSend(msg)
+        raise RequestsErrorGetApiAnswer(msg) from request_error
     if homework_statuses.status_code != HTTPStatus.OK:
         msg = f'Ошибка: Статус код {homework_statuses.status_code}'
         logger.error(msg)
-        raise SatatusCodeNot200(msg)
+        raise StatusCodeNot200(msg)
     try:
         return homework_statuses.json()
     except json.JSONDecodeError:
