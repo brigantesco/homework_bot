@@ -56,12 +56,16 @@ def send_message(bot, message):
 
 
 class StatusCodeNot200(Exception):
-    """Ошибка при статусе запроса отлиичном от 200."""
+    """Ошибка статуса запроса отлиичном от 200."""
+
     pass
+
 
 class RequestsErrorGetApiAnswer(Exception):
     """Ошибка отправки запроса."""
+
     pass
+
 
 def get_api_answer(current_timestamp):
     """Делает запрос к единственному эндпоинту API-сервиса."""
